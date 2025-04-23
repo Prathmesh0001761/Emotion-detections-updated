@@ -1,9 +1,0 @@
-streamlit
-keras
-matplotlib
-numpy
-librosa
-pandas
-Pillow
-tensorflow
-protobuf
