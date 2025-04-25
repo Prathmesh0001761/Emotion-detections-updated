@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Support Chatbot</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+            background: #2A3B61;
+            color: #FFFFFF;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            max-width: 100%;
+            height: 460px;
+            margin: 10px auto;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: #4A90E2;
+            padding: 10px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            position: relative;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4A90E2 #2A3B61;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #2A3B61;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #4A90E2;
+            border-radius: 4px;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            max-width: 80%;
+            line-height: 1.4;
+            animation: fadeIn 0.3s ease-out;
+            transition: transform 0.2s ease;
+        }
+
+        .message:hover {
+            transform: translateY(-2px);
+        }
+
+        .bot-message {
+            background: #4A90E2;
+            color: #FFFFFF;
+            margin-right: 10px;
+        }
+
+        .user-message {
+            background: #F4A261;
+            color: #FFFFFF;
+            margin-left: auto;
+            margin-right: 10px;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px 15px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .typing-indicator.active {
+            display: block;
+        }
+
+        .typing-indicator::before {
+            content: '• • •';
+            animation: blink 1s infinite;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-top: 1px solid #3B4A6B;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: #3B4A6B;
+            color: #FFFFFF;
+            font-size: 1rem;
+            outline: none;
+            transition: background 0.3s ease;
+        }
+
+        .chat-input input:focus {
+            background: #4A506B;
+        }
+
+        .chat-input button {
+            padding: 10px 20px;
+            margin-left: 10px;
+            background: #4A90E2;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .chat-input button:hover {
+            background: #F4A261;
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 400px;
+                margin: 5px;
+            }
+
+            .chat-header {
+                font-size: 1rem;
+            }
+
+            .message {
+                font-size: 0.9rem;
+            }
+
+            .chat-input input {
+                font-size: 0.9rem;
+            }
+
+            .chat-input button {
+                padding: 8px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">Emotion Support Chatbot</div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="typing-indicator" id="typingIndicator"></div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="userInput" placeholder="Type your message..." />
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        const userInput = document.getElementById('userInput');
+        const typingIndicator = document.getElementById('typingIndicator');
+
+        // Load conversation history and preferences
+        let conversationHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+        let userPreferences = JSON.parse(localStorage.getItem('userPreferences')) || {
+            preferredExercises: [],
+            dislikedExercises: []
+        };
+        let conversationStep = 0;
+        let lastUserMessage = '';
+
+        // Sentiment keywords
+        const sentimentKeywords = {
+            positive: ['good', 'better', 'okay', 'fine', 'great', 'happy', 'calm'],
+            negative: ['bad', 'worse', 'awful', 'terrible', 'sad', 'angry', 'scared', 'stressed'],
+            neutral: ['not sure', 'maybe', 'idk', 'unsure']
+        };
+
+        // Emotion-based responses and exercises
+        const responses = {
+            Sad: {
+                initial: [
+                    "I'm really sorry you're feeling sad. Want to share what's been weighing on your heart?",
+                    "It sounds like you're going through a tough time. I'm here—would you like to talk about what's making you feel this way?",
+                    "I sense some sadness. Can I help by listening to what's been going on?"
+                ],
+                followUp: [
+                    "Thanks for sharing that. Would you like to try a gentle exercise to lift your spirits, like a breathing technique?",
+                    "That sounds really heavy. How about we try something to process those feelings, like writing them down?",
+                    "I appreciate you opening up. Would a short mindfulness activity help you feel a bit lighter?"
+                ],
+                exercises: [
+                    {
+                        id: 'breathing',
+                        text: "Let's try a calming breathing exercise: Inhale for 4 seconds, hold for 4, exhale for 4. Repeat 5 times. Want to give it a go?"
+                    },
+                    {
+                        id: 'gratitude',
+                        text: "Write down 3 things you're grateful for today, even small ones like a warm drink or a kind word. Ready to try?"
+                    },
+                    {
+                        id: 'walk',
+                        text: "Take a 5-minute walk, focusing on the sights and sounds around you. Feel like stepping outside or imagining a walk?"
+                    },
+                    {
+                        id: 'music',
+                        text: "Listen to a soothing song that lifts your mood. Got a favorite track in mind?"
+                    }
+                ],
+                encouragement: [
+                    "You're doing great by talking about this. Want to try another exercise or keep sharing?",
+                    "I'm proud of you for opening up. How about another activity to help you feel a bit better?",
+                    "You're taking important steps. Shall we continue with another exercise or talk more?"
+                ]
+            },
+            Angry: {
+                initial: [
+                    "I can feel that anger—sounds intense. Want to tell me what's got you so fired up?",
+                    "It seems like something's really frustrating you. I'm here to listen—what's going on?",
+                    "Anger can be tough. Would you like to share what's been making you feel this way?"
+                ],
+                followUp: [
+                    "Thanks for letting me know. How about a quick exercise to release some of that tension, like a physical stretch?",
+                    "That sounds really aggravating. Want to try a technique to cool down, like deep breathing?",
+                    "I appreciate you sharing. Would a short activity help channel that energy?"
+                ],
+                exercises: [
+                    {
+                        id: 'tension',
+                        text: "Clench your fists for 5 seconds, then release slowly. Repeat 3 times to let go of tension. Ready?"
+                    },
+                    {
+                        id: 'writing',
+                        text: "Write down what's making you angry, then tear up the paper to let it go. Want to try this?"
+                    },
+                    {
+                        id: 'stretch',
+                        text: "Do a quick 1-minute shoulder roll and neck stretch to release physical tension. Up for it?"
+                    },
+                    {
+                        id: 'counting',
+                        text: "Count backward from 10 slowly, breathing deeply with each number. Shall we do it together?"
+                    }
+                ],
+                encouragement: [
+                    "You're handling this really well. Want to try another exercise or talk more about what's going on?",
+                    "Great job expressing that. How about another activity to keep calming down?",
+                    "You're making progress. Shall we do another exercise or continue chatting?"
+                ]
+            },
+            Fear: {
+                initial: [
+                    "It sounds like you're feeling scared—I'm here for you. Want to share what's been worrying you?",
+                    "I sense some fear. Would you like to talk about what's been on your mind lately?",
+                    "Feeling afraid can be tough. I'm listening—want to tell me what's going on?"
+                ],
+                followUp: [
+                    "Thank you for sharing. How about a grounding exercise to help you feel more at ease?",
+                    "That sounds really challenging. Want to try a simple technique to calm your nerves?",
+                    "I appreciate you opening up. Would a quick activity help you feel safer?"
+                ],
+                exercises: [
+                    {
+                        id: 'grounding',
+                        text: "Try the 5-4-3-2-1 technique: Name 5 things you see, 4 you can touch, 3 you can hear, 2 you can smell, 1 you can taste. Ready?"
+                    },
+                    {
+                        id: 'breathing',
+                        text: "Take slow, deep breaths for 1 minute, focusing on the air moving in and out. Want to try?"
+                    },
+                    {
+                        id: 'visualization',
+                        text: "Picture a safe, peaceful place—like a beach or forest. Describe it to yourself in detail. Up for it?"
+                    },
+                    {
+                        id: 'affirmation',
+                        text: "Repeat this affirmation: 'I am safe and in control.' Say it 5 times slowly. Shall we do it?"
+                    }
+                ],
+                encouragement: [
+                    "You're so brave for talking about this. Want to try another exercise or keep sharing?",
+                    "Great job facing those feelings. How about another activity to feel more grounded?",
+                    "You're doing wonderfully. Shall we continue with another exercise or talk more?"
+                ]
+            }
+        };
+
+        // Initialize chatbot
+        function initializeChat() {
+            const emotionData = window.emotionData || { emotion: 'Sad', confidence: 80, session_id: 'default' };
+            const emotion = emotionData.emotion;
+            // Clear history if new session
+            if (emotionData.session_id !== localStorage.getItem('lastSessionId')) {
+                conversationHistory = [];
+                conversationStep = 0;
+                localStorage.setItem('lastSessionId', emotionData.session_id);
+            }
+            if (conversationHistory.length === 0) {
+                conversationHistory.push({ sender: 'bot', text: getRandomResponse(responses[emotion].initial) });
+            }
+            updateChat();
+            localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
+        }
+
+        // Get random response
+        function getRandomResponse(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+
+        // Add message to chat
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Update chat with history
+        function updateChat() {
+            chatMessages.innerHTML = '<div class="typing-indicator" id="typingIndicator"></div>';
+            conversationHistory.forEach(msg => addMessage(msg.sender, msg.text));
+            typingIndicator.style.display = 'none';
+        }
+
+        // Basic sentiment analysis
+        function analyzeSentiment(message) {
+            const lowerMessage = message.toLowerCase();
+            let score = 0;
+            sentimentKeywords.positive.forEach(word => {
+                if (lowerMessage.includes(word)) score += 1;
+            });
+            sentimentKeywords.negative.forEach(word => {
+                if (lowerMessage.includes(word)) score -= 1;
+            });
+            sentimentKeywords.neutral.forEach(word => {
+                if (lowerMessage.includes(word)) score += 0;
+            });
+            if (score > 0) return 'positive';
+            if (score < 0) return 'negative';
+            return 'neutral';
+        }
+
+        // Check for exercise preferences
+        function getPreferredExercise(emotion, userMessage) {
+            const lowerMessage = userMessage.toLowerCase();
+            const availableExercises = responses[emotion].exercises.filter(
+                ex => !userPreferences.dislikedExercises.includes(ex.id)
+            );
+            // Prefer previously liked exercises
+            const preferred = availableExercises.find(ex => userPreferences.preferredExercises.includes(ex.id));
+            if (preferred) return preferred;
+            // Avoid recently suggested exercises
+            const recentExercises = conversationHistory
+                .filter(msg => msg.sender === 'bot' && msg.text.includes('try'))
+                .map(msg => msg.text)
+                .join(' ');
+            const filteredExercises = availableExercises.filter(
+                ex => !recentExercises.includes(ex.text.split(':')[0])
+            );
+            return getRandomResponse(filteredExercises.length > 0 ? filteredExercises : availableExercises);
+        }
+
+        // Generate bot response
+        async function generateBotResponse(userMessage, emotion) {
+            const sentiment = analyzeSentiment(userMessage);
+            const lowerMessage = userMessage.toLowerCase();
+            let response;
+
+            // Show typing indicator
+            typingIndicator.className = 'typing-indicator active';
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate thinking
+
+            if (conversationStep === 0) {
+                response = getRandomResponse(responses[emotion].followUp);
+                conversationStep++;
+            } else if (conversationStep === 1) {
+                const exercise = getPreferredExercise(emotion, userMessage);
+                response = exercise.text;
+                conversationStep++;
+            } else {
+                // Handle user feedback
+                if (lowerMessage.includes('yes') || lowerMessage.includes('sure') || lowerMessage.includes('okay')) {
+                    const exercise = getPreferredExercise(emotion, userMessage);
+                    response = exercise.text;
+                    userPreferences.preferredExercises.push(exercise.id);
+                } else if (lowerMessage.includes('no') || lowerMessage.includes('not really') || lowerMessage.includes('dont')) {
+                    const lastExercise = conversationHistory
+                        .filter(msg => msg.sender === 'bot' && msg.text.includes('try'))
+                        .pop()?.text.split(':')[0];
+                    if (lastExercise) {
+                        const exerciseId = responses[emotion].exercises.find(ex => ex.text.includes(lastExercise))?.id;
+                        if (exerciseId && !userPreferences.dislikedExercises.includes(exerciseId)) {
+                            userPreferences.dislikedExercises.push(exerciseId);
+                        }
+                    }
+                    response = "No worries! Would you like to try a different activity, or maybe just talk about how you're feeling?";
+                } else if (sentiment === 'positive') {
+                    response = getRandomResponse(responses[emotion].encouragement);
+                } else if (sentiment === 'negative') {
+                    response = `I'm really sorry you're feeling that way. Want to share more, or would you like to try something like ${getRandomResponse(responses[emotion].exercises).text.split(':')[0]}?`;
+                } else {
+                    // Fallback for ambiguous input
+                    response = "I'm here to help. Could you share a bit more about how you're feeling, or would you like to try an exercise?";
+                }
+            }
+
+            // Contextual follow-up
+            if (lastUserMessage && conversationStep > 1) {
+                if (lowerMessage.includes('help') || lowerMessage.includes('support')) {
+                    response = `I'm here to support you. How about ${getRandomResponse(responses[emotion].exercises).text.split(':')[0]} to help you feel a bit better?`;
+                } else if (lowerMessage.length > 50) {
+                    response += " Thanks for sharing so much—it really helps me understand how you're feeling.";
+                }
+            }
+
+            lastUserMessage = userMessage;
+            localStorage.setItem('userPreferences', JSON.stringify(userPreferences));
+            return response;
+        }
+
+        // Handle sending message
+        async function sendMessage() {
+            const userMessage = userInput.value.trim();
+            if (!userMessage) return;
+
+            const emotion = window.emotionData.emotion;
+            conversationHistory.push({ sender: 'user', text: userMessage });
+            addMessage('user', userMessage);
+
+            // Generate and add bot response
+            const botResponse = await generateBotResponse(userMessage, emotion);
+            conversationHistory.push({ sender: 'bot', text: botResponse });
+            addMessage('bot', botResponse);
+
+            localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
+            userInput.value = '';
+            typingIndicator.className = 'typing-indicator';
+        }
+
+        // Handle Enter key press
+        userInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') await sendMessage();
+        });
+
+        // Initialize chat on load
+        window.onload = initializeChat;
+    </script>
+</body>
+</html>
